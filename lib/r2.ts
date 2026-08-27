@@ -22,9 +22,6 @@ export const r2Client = new S3Client({
   },
 });
 
-/**
- * Generate a presigned PUT URL for direct browser-to-R2 upload (expires in 15 minutes)
- */
 export async function getPresignedUploadUrl(key: string): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET_NAME,
@@ -34,17 +31,15 @@ export async function getPresignedUploadUrl(key: string): Promise<string> {
   return await getSignedUrl(r2Client, command, { expiresIn: 900 });
 }
 
-/**
- * Generate a presigned GET URL for downloading files securely (expires in 1 hour)
- */
 export async function getPresignedDownloadUrl(
   key: string,
   originalName: string,
+  disposition: "attachment" | "inline" = "attachment",
 ): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: R2_BUCKET_NAME,
     Key: key,
-    ResponseContentDisposition: `attachment; filename="${encodeURIComponent(
+    ResponseContentDisposition: `${disposition}; filename="${encodeURIComponent(
       originalName,
     )}"`,
   });
@@ -52,9 +47,6 @@ export async function getPresignedDownloadUrl(
   return await getSignedUrl(r2Client, command, { expiresIn: 3600 });
 }
 
-/**
- * Delete a file directly from Cloudflare R2
- */
 export async function deleteFromR2(key: string): Promise<void> {
   const command = new DeleteObjectCommand({
     Bucket: R2_BUCKET_NAME,

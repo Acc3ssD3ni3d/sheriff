@@ -58,7 +58,11 @@ export default async function Home() {
 
             <p className="mx-auto mt-3 md:mt-4 max-w-xl text-sm md:text-base text-gray-600 leading-relaxed px-4 sm:px-0">
               Lock down your payloads with industry-grade client protection and
-              deliver them safely across the web at lightning speed.
+              deliver them safely across the web from everyday docs to{" "}
+              <span className="font-extrabold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md shadow-xs">
+                100MB+ &amp; beyond
+              </span>
+              .
             </p>
 
             <div className="mt-8 mx-auto max-w-md w-full px-2 sm:px-0">
@@ -86,7 +90,10 @@ export default async function Home() {
                   Click here to start uploading files
                 </h3>
                 <p className="mt-1 text-xs text-gray-500 hidden sm:block">
-                  Direct browser transfer stream with live progressive tracking
+                  Direct browser stream built for{" "}
+                  <span className="font-bold text-amber-600 underline decoration-amber-400 underline-offset-2">
+                    100MB+ &amp; beyond
+                  </span>
                 </p>
 
                 <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-black/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-black group-hover:bg-black group-hover:text-white transition">
@@ -96,7 +103,11 @@ export default async function Home() {
             </div>
 
             <p className="mt-8 text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 font-semibold">
-              Fast Draw · Iron-Clad Security · Zero Compromises
+              Fast Draw ·{" "}
+              <span className="text-amber-600 font-extrabold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                100MB+ &amp; Beyond
+              </span>{" "}
+              · Zero Compromises
             </p>
           </div>
         </div>
@@ -121,8 +132,8 @@ export default async function Home() {
               </div>
               <h3 className="mt-4 text-base font-bold text-gray-900">Upload</h3>
               <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                Drop any file into Sheriff. Big files stream straight from your
-                browser — no slow middle hop, no stalled progress bar.
+                Drop any file into Sheriff. Large payloads stream straight from
+                your browser no slow middle hop, no stalled progress bar.
               </p>
             </div>
 
@@ -157,7 +168,7 @@ export default async function Home() {
             </h3>
             <p className="mt-2 text-sm text-gray-500 text-center max-w-xl mx-auto">
               Most file apps bounce your data through slow servers. Sheriff
-              takes the direct path — so uploads and downloads finish sooner.
+              takes the direct path so uploads and downloads finish sooner.
             </p>
 
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
@@ -239,7 +250,11 @@ export default async function Home() {
                   </p>
                   <p className="mt-1 text-xs sm:text-sm text-gray-500 leading-relaxed">
                     Watch every upload move from 0% to 100% in real time. Cancel
-                    anytime. Built for everyday files and 100MB+ payloads.
+                    anytime. Built for everyday files,{" "}
+                    <span className="font-bold text-amber-600 bg-amber-50 px-1 py-0.5 rounded border border-amber-200">
+                      100MB+ &amp; beyond
+                    </span>
+                    .
                   </p>
                 </div>
               </div>
@@ -304,7 +319,6 @@ function AnimatedPathBackground() {
     <div className="absolute inset-0 z-10 w-full h-full pointer-events-none">
       <div className="absolute left-1/2 top-1/2 h-[300px] w-[300px] md:h-[600px] md:w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-amber-100/60 via-orange-50/40 to-transparent blur-3xl" />
 
-      {/* Mobile/Tablet Layout (<1024px) */}
       <div className="block lg:hidden absolute inset-0 w-full h-full">
         <svg
           viewBox="0 0 375 660"
@@ -398,6 +412,7 @@ function AnimatedPathBackground() {
               </div>
             </foreignObject>
           </g>
+
           <g>
             <animateMotion dur="38s" repeatCount="indefinite" begin="-19s">
               <mpath href="#mobAcross" />
@@ -418,7 +433,6 @@ function AnimatedPathBackground() {
         </svg>
       </div>
 
-      {/* Desktop Layout (>=1024px) */}
       <div className="hidden lg:block absolute inset-0 w-full h-full">
         <svg
           viewBox="0 0 1920 1080"
