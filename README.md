@@ -103,17 +103,17 @@ Vercel
 Architecture
 
 Browser
-   |
-   v
+|
+v
 Next.js
-   |
-   +----------------------+
-   |                      |
-   v                      v
-MongoDB Atlas         Cloudflare R2
-   |                      |
-User data             Actual files
-File metadata         100MB+ files
+|
++----------------------+
+| |
+v v
+MongoDB Atlas Cloudflare R2
+| |
+User data Actual files
+File metadata 100MB+ files
 Permissions
 
 Large files are uploaded directly to Cloudflare R2 using a secure upload flow instead of sending the complete file through the Next.js application server.
@@ -125,17 +125,21 @@ Environment Variables
 Create a .env.local file in the project root:
 
 # MongoDB
+
 MONGODB_URI=mongodb+srv://...
 
 # Auth.js
+
 AUTH_SECRET=your-secret-here
 AUTH_URL=http://localhost:3000
 
 # Google OAuth
+
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 
 # Cloudflare R2
+
 R2_ACCOUNT_ID=your-account-id
 R2_ACCESS_KEY_ID=your-access-key
 R2_SECRET_ACCESS_KEY=your-secret-key
@@ -195,7 +199,7 @@ MongoDB stores application data and file metadata.
 
 User
 
-_id
+\_id
 name
 email
 passwordHash
@@ -204,7 +208,7 @@ updatedAt
 
 File
 
-_id
+\_id
 ownerId
 originalName
 storageKey
@@ -223,17 +227,17 @@ Security Model
 Every protected file operation follows:
 
 Request
-   |
-   v
+|
+v
 Authenticate user
-   |
-   v
+|
+v
 Find file
-   |
-   v
+|
+v
 Check ownership / public visibility
-   |
-   v
+|
+v
 Allow or reject request
 
 A logged-in user cannot access another user's private file simply by knowing its file ID.
@@ -242,16 +246,16 @@ Public files are accessed through secure share tokens rather than exposing inter
 
 API Overview
 
-GET    /api/files
-POST   /api/files
-GET    /api/files/[id]
-PATCH  /api/files/[id]
+GET /api/files
+POST /api/files
+GET /api/files/[id]
+PATCH /api/files/[id]
 DELETE /api/files/[id]
 
-GET    /api/files/[id]/download
-PATCH  /api/files/[id]/visibility
+GET /api/files/[id]/download
+PATCH /api/files/[id]/visibility
 
-GET    /share/[token]
+GET /share/[token]
 
 Authentication routes are handled through the configured Auth.js setup.
 
