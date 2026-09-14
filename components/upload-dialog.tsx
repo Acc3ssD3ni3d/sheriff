@@ -122,10 +122,8 @@ export function UploadDialog({
       });
 
       // 3. Confirm completed status in MongoDB
-      const confirmRes = await fetch(`/api/files/${fileId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "completed" }),
+      const confirmRes = await fetch(`/api/files/${fileId}/complete`, {
+        method: "POST",
       });
 
       if (!confirmRes.ok) {
@@ -149,11 +147,7 @@ export function UploadDialog({
 
         // Mark as failed in DB if file record was initialized
         if (fileId) {
-          fetch(`/api/files/${fileId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "failed" }),
-          }).catch(console.error);
+          fetch(`/api/files/${fileId}`, { method: "DELETE" }).catch(console.error);
         }
       }
     } finally {

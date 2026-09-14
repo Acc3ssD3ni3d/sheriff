@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { File } from "@/models/file";
-import { getPresignedUploadUrl } from "@/lib/r2";
 import { fileInitUploadSchema } from "@/lib/validation";
-import { generateStorageKey, sanitizeFilename } from "@/lib/utils";
 import mongoose from "mongoose";
-
-const SYSTEM_STORAGE_LIMIT_BYTES = 9.5 * 1024 * 1024 * 1024; // 9.5 GB max system safeguard
+import { createMongoUploadDependencies } from "@/lib/files/mongo-upload";
+import { initializeUpload, UploadServiceError } from "@/lib/files/service";
+import { getFileLimits } from "@/lib/files/config";
+import { escapeRegex } from "@/lib/api/pagination";
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
-    const sortBy = searchParams.get("sortBy") || "createdAt";
+    const requestedSort = searchParams.get("sortBy") || "createdAt";
+    const sortBy = ["createdAt", "originalName", "size"].includes(requestedSort)
+      ? requestedSort
+      : "createdAt";
     const order = searchParams.get("order") === "asc" ? 1 : -1;
 
     await connectDB();
@@ -33,7 +36,7 @@ export async function GET(req: NextRequest) {
     };
 
     if (search) {
-      query.originalName = { $regex: search, $options: "i" };
+      query.originalName = { $regex: escapeRegex(search.slice(0, 200)), $options: "i" };
     }
 
     const files = await File.find(query)
@@ -58,8 +61,7 @@ export async function GET(req: NextRequest) {
       data: files,
       stats: {
         userBytesUsed,
-        // Increased from 100MB to 10GB for realistic free tier capacity
-        userStorageLimit: 10 * 1024 * 1024 * 1024,
+        userStorageLimit: getFileLimits().storageLimit,
       },
     });
   } catch (error) {
@@ -94,54 +96,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { originalName, mimeType, size } = result.data;
-
-    await connectDB();
-
-    // System-wide 9.5 GB free-tier aggregate check
-    const systemAgg = await File.aggregate([
-      { $match: { status: "completed", deletedAt: null } },
-      { $group: { _id: null, totalBytes: { $sum: "$size" } } },
-    ]);
-    const systemBytesUsed = systemAgg[0]?.totalBytes || 0;
-
-    if (systemBytesUsed + size > SYSTEM_STORAGE_LIMIT_BYTES) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Storage capacity reached. Please try again later.",
-        },
-        { status: 403 },
-      );
-    }
-
-    const sanitizedName = sanitizeFilename(originalName);
-    const storageKey = generateStorageKey(session.user.id, sanitizedName);
-
-    const newFile = await File.create({
-      ownerId: session.user.id,
-      originalName: sanitizedName,
-      storageKey,
-      mimeType,
-      size,
-      status: "uploading",
-      visibility: "private",
-    });
-
-    const uploadUrl = await getPresignedUploadUrl(storageKey);
+    const upload = await initializeUpload(
+      createMongoUploadDependencies(),
+      session.user.id,
+      {
+        filename: result.data.originalName,
+        contentType: result.data.mimeType,
+        size: result.data.size,
+      },
+      req.headers.get("idempotency-key"),
+    );
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          fileId: newFile._id.toString(),
-          uploadUrl,
-          storageKey,
+          ...upload,
         },
       },
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof UploadServiceError) {
+      const status = error.code === "file_too_large" ? 413 : error.code === "invalid_file" ? 400 : 409;
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status });
+    }
     console.error("Init upload error:", error);
     return NextResponse.json(
       { success: false, error: "Failed to initiate upload" },

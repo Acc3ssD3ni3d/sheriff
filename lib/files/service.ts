@@ -197,3 +197,18 @@ export async function completeUpload(
 
   return dependencies.finalize(file.id);
 }
+
+export async function cancelUpload(
+  dependencies: UploadServiceDependencies,
+  ownerId: string,
+  fileId: string,
+): Promise<UploadFileRecord> {
+  const file = await dependencies.getOwned(ownerId, fileId);
+  if (!file) throw new UploadServiceError("file_not_found", "File not found.");
+  if (file.status !== "uploading" || file.reservationState !== "reserved") {
+    throw new UploadServiceError("invalid_upload_state", "Upload cannot be cancelled.");
+  }
+  const failed = await dependencies.failAndRelease(file.id);
+  await dependencies.deleteObject(file.storageKey).catch(() => undefined);
+  return failed;
+}

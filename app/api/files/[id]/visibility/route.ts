@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { connectDB } from "@/lib/db";
-import { File } from "@/models/file";
 import { visibilitySchema } from "@/lib/validation";
-import { generateShareToken } from "@/lib/utils";
+import { updateOwnedFile } from "@/lib/files/management";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -34,8 +32,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await connectDB();
-    const file = await File.findOne({ _id: id, ownerId: session.user.id });
+    const file = await updateOwnedFile(session.user.id, id, {
+      visibility: result.data.visibility,
+    });
 
     if (!file) {
       return NextResponse.json(
@@ -43,21 +42,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
         { status: 404 },
       );
     }
-
-    const newVisibility = result.data.visibility;
-    file.visibility = newVisibility;
-
-    if (newVisibility === "public") {
-      // Generate a shareToken if one doesn't exist yet
-      if (!file.shareToken) {
-        file.shareToken = generateShareToken();
-      }
-    } else {
-      // Revoke share token when made private
-      file.shareToken = null;
-    }
-
-    await file.save();
 
     return NextResponse.json({
       success: true,

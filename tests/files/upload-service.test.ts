@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  cancelUpload,
   completeUpload,
   initializeUpload,
   UploadServiceError,
@@ -160,6 +161,14 @@ describe("verified upload service", () => {
       createHash("sha256").update("private-retry-key").digest("hex"),
     );
     expect(JSON.stringify(dependencies.files[0])).not.toContain("private-retry-key");
+  });
+
+  it("cancels an uploading reservation and releases quota", async () => {
+    const dependencies = memoryDependencies();
+    const initialized = await initializeUpload(dependencies, "user-1", input, null, NOW);
+    const cancelled = await cancelUpload(dependencies, "user-1", initialized.fileId);
+    expect(cancelled.status).toBe("failed");
+    expect(dependencies.reserved).toBe(0);
   });
 
   it("uses typed service errors", () => {

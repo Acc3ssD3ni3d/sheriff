@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { decodeCursor, encodeCursor, escapeRegex } from "@/lib/api/pagination";
 import { File } from "@/models/file";
 import { generateShareToken, sanitizeFilename } from "@/lib/utils";
+import { headR2Object } from "@/lib/r2";
 
 interface BaseListInput {
   search: string;
@@ -108,6 +109,13 @@ export async function softDeleteOwnedFile(ownerId: string, id: string) {
 export async function restoreOwnedFile(ownerId: string, id: string) {
   if (!mongoose.isValidObjectId(id)) return null;
   await connectDB();
+  const file = await File.findOne({
+    _id: id,
+    ownerId,
+    status: "completed",
+    deletedAt: { $ne: null },
+  });
+  if (!file || !(await headR2Object(file.storageKey))) return null;
   return File.findOneAndUpdate(
     { _id: id, ownerId, status: "completed", deletedAt: { $ne: null } },
     { $set: { deletedAt: null } },
