@@ -41,6 +41,24 @@ export const visibilitySchema = z.object({
   visibility: z.enum(["public", "private"]),
 });
 
+export const apiUploadSchema = z
+  .object({
+    filename: z.string().trim().min(1).max(255),
+    contentType: z.string().trim().min(1).max(255),
+    size: z.number().int().positive(),
+  })
+  .strict();
+
+export const apiFileUpdateSchema = z
+  .object({
+    filename: z.string().trim().min(1).max(255).optional(),
+    visibility: z.enum(["public", "private"]).optional(),
+  })
+  .strict()
+  .refine((value) => value.filename !== undefined || value.visibility !== undefined, {
+    message: "At least one field is required",
+  });
+
 export const createApiTokenSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
