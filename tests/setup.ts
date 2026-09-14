@@ -1,4 +1,3 @@
-process.env.NODE_ENV = "test";
 process.env.MONGODB_URI ??= "mongodb://127.0.0.1:27017/sheriff-test";
 process.env.AUTH_SECRET ??= "test-auth-secret";
 process.env.API_TOKEN_HASH_PEPPER ??= "test-api-token-pepper";
