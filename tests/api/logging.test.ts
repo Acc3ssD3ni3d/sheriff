@@ -51,4 +51,44 @@ describe("API logging", () => {
       errorCode: undefined,
     });
   });
+
+  it("records redacted error diagnostics when given an error", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = new Error("connection refused");
+    writeApiLog({
+      requestId: "req_2",
+      route: "/api/v1/files",
+      status: 500,
+      durationMs: 5,
+      errorCode: "internal_error",
+      error,
+    });
+
+    const logged = info.mock.calls[0][1] as Record<string, unknown>;
+    expect(logged.errorName).toBe("Error");
+    expect(logged.errorMessage).toBe("connection refused");
+    expect(typeof logged.errorStack).toBe("string");
+  });
+
+  it("redacts credentials carried on a thrown error", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = Object.assign(new Error("upstream rejected"), {
+      authorization: "Bearer secret",
+      context: { storageKey: "user/object" },
+    });
+    writeApiLog({
+      requestId: "req_3",
+      route: "/api/v1/files",
+      status: 500,
+      durationMs: 5,
+      errorCode: "internal_error",
+      error,
+    });
+
+    const logged = info.mock.calls[0][1] as Record<string, unknown>;
+    expect(logged.errorDetails).toEqual({
+      authorization: "[REDACTED]",
+      context: { storageKey: "[REDACTED]" },
+    });
+  });
 });

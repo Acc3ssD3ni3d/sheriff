@@ -12,6 +12,7 @@ import {
   FileDeletionError,
   permanentlyDeleteFile,
 } from "@/lib/files/deletion";
+import { writeApiLog } from "@/lib/api/logging";
 
 interface Context { params: Promise<{ id: string }> }
 
@@ -19,10 +20,15 @@ export async function GET(request: Request, context: Context) {
   const authorization = await authorizeApiRequest(request, "files:read");
   if (!authorization.ok) return authorization.response;
   const requestId = createRequestId();
-  const { id } = await context.params;
-  const file = await getOwnedFile(authorization.principal.userId, id);
-  if (!file) return apiError(404, "file_not_found", "File not found.", { requestId, headers: authorization.headers });
-  return apiSuccess(publicFile(file), requestId, { headers: authorization.headers });
+  try {
+    const { id } = await context.params;
+    const file = await getOwnedFile(authorization.principal.userId, id);
+    if (!file) return apiError(404, "file_not_found", "File not found.", { requestId, headers: authorization.headers });
+    return apiSuccess(publicFile(file), requestId, { headers: authorization.headers });
+  } catch (error) {
+    writeApiLog({ requestId, route: "/api/v1/files/:id", status: 500, durationMs: 0, tokenId: authorization.principal.tokenId, errorCode: "internal_error", error });
+    return apiError(500, "internal_error", "Unable to get file.", { requestId, headers: authorization.headers });
+  }
 }
 
 export async function PATCH(request: Request, context: Context) {
@@ -39,7 +45,7 @@ export async function PATCH(request: Request, context: Context) {
   } catch (error) {
     if (error instanceof SyntaxError) return apiError(400, "invalid_json", "Request body must be valid JSON.", { requestId, headers: authorization.headers });
     if (error instanceof Error && error.message === "invalid_filename") return apiError(400, "invalid_filename", "Filename is invalid.", { requestId, headers: authorization.headers });
-    console.error("API file update failed", { requestId, error });
+    writeApiLog({ requestId, route: "/api/v1/files/:id", status: 500, durationMs: 0, tokenId: authorization.principal.tokenId, errorCode: "internal_error", error });
     return apiError(500, "internal_error", "Unable to update file.", { requestId, headers: authorization.headers });
   }
 }
@@ -57,11 +63,16 @@ export async function DELETE(request: Request, context: Context) {
       if (error instanceof FileDeletionError) {
         return apiError(error.code === "file_not_found" ? 404 : 502, error.code, error.message, { requestId, headers: authorization.headers });
       }
-      console.error("API permanent file deletion failed", { requestId, error });
+      writeApiLog({ requestId, route: "/api/v1/files/:id", status: 500, durationMs: 0, tokenId: authorization.principal.tokenId, errorCode: "internal_error", error });
       return apiError(500, "internal_error", "Unable to permanently delete file.", { requestId, headers: authorization.headers });
     }
   }
-  const file = await softDeleteOwnedFile(authorization.principal.userId, id);
-  if (!file) return apiError(404, "file_not_found", "File not found.", { requestId, headers: authorization.headers });
-  return apiSuccess(publicFile(file), requestId, { headers: authorization.headers });
+  try {
+    const file = await softDeleteOwnedFile(authorization.principal.userId, id);
+    if (!file) return apiError(404, "file_not_found", "File not found.", { requestId, headers: authorization.headers });
+    return apiSuccess(publicFile(file), requestId, { headers: authorization.headers });
+  } catch (error) {
+    writeApiLog({ requestId, route: "/api/v1/files/:id", status: 500, durationMs: 0, tokenId: authorization.principal.tokenId, errorCode: "internal_error", error });
+    return apiError(500, "internal_error", "Unable to delete file.", { requestId, headers: authorization.headers });
+  }
 }

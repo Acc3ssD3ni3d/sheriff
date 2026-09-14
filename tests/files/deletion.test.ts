@@ -23,6 +23,6 @@ describe("permanent file deletion", () => {
       markFailure,
     }, "user-1", "file-1")).rejects.toMatchObject({ code: "storage_delete_failed" });
     expect(remove).not.toHaveBeenCalled();
-    expect(markFailure).toHaveBeenCalledWith("file-1");
+    expect(markFailure).toHaveBeenCalledWith("file-1", "user-1");
   });
 });

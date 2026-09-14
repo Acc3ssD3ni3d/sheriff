@@ -29,11 +29,34 @@ export interface ApiLogEvent {
   userId?: string;
   tokenId?: string;
   errorCode?: string;
+  error?: unknown;
   [key: string]: unknown;
 }
 
+const ERROR_OWN_KEYS_IGNORED = new Set(["message", "stack", "name"]);
+
+function errorDiagnostics(error: unknown): Record<string, unknown> {
+  if (error === undefined) return {};
+  if (!(error instanceof Error)) {
+    return { errorDetails: redactApiLogValue(error) };
+  }
+
+  const details = Object.fromEntries(
+    Object.entries(error).filter(([key]) => !ERROR_OWN_KEYS_IGNORED.has(key)),
+  );
+
+  return {
+    errorName: error.name,
+    errorMessage: error.message,
+    errorStack: error.stack,
+    ...(Object.keys(details).length > 0
+      ? { errorDetails: redactApiLogValue(details) }
+      : {}),
+  };
+}
+
 export function writeApiLog(event: ApiLogEvent): void {
-  const { requestId, route, status, durationMs, userId, tokenId, errorCode } = event;
+  const { requestId, route, status, durationMs, userId, tokenId, errorCode, error } = event;
   console.info("api_request", {
     requestId,
     route,
@@ -42,5 +65,6 @@ export function writeApiLog(event: ApiLogEvent): void {
     userId,
     tokenId,
     errorCode,
+    ...errorDiagnostics(error),
   });
 }

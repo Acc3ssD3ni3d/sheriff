@@ -14,7 +14,7 @@ export interface PermanentDeletionDependencies {
   getOwned(ownerId: string, id: string): Promise<DeletableFile | null>;
   deleteObject(key: string): Promise<void>;
   deleteRecordAndReleaseUsage(file: DeletableFile, ownerId: string): Promise<void>;
-  markFailure(id: string): Promise<void>;
+  markFailure(id: string, ownerId: string): Promise<void>;
 }
 
 export class FileDeletionError extends Error {
@@ -34,7 +34,7 @@ export async function permanentlyDeleteFile(
   try {
     await dependencies.deleteObject(file.storageKey);
   } catch {
-    await dependencies.markFailure(file.id);
+    await dependencies.markFailure(file.id, ownerId);
     throw new FileDeletionError("storage_delete_failed");
   }
   await dependencies.deleteRecordAndReleaseUsage(file, ownerId);
@@ -67,9 +67,12 @@ export function createMongoDeletionDependencies(): PermanentDeletionDependencies
         }
       });
     },
-    async markFailure(id) {
+    async markFailure(id, ownerId) {
       await connectDB();
-      await File.updateOne({ _id: id }, { $set: { deletionState: "deletion_failed" } });
+      await File.updateOne(
+        { _id: id, ownerId },
+        { $set: { deletionState: "deletion_failed" } },
+      );
     },
   };
 }

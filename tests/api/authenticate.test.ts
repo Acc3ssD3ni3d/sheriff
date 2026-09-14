@@ -40,10 +40,10 @@ async function errorBody(result: Awaited<ReturnType<typeof authenticateApiReques
 
 describe("API bearer authentication", () => {
   it.each([
-    [undefined, "missing header"],
-    ["Basic abc", "wrong scheme"],
-    ["Bearer malformed", "malformed token"],
-  ])("returns the same 401 contract for %s", async (authorization, _case) => {
+    { authorization: undefined, case: "missing header" },
+    { authorization: "Basic abc", case: "wrong scheme" },
+    { authorization: "Bearer malformed", case: "malformed token" },
+  ])("returns the same 401 contract for $case", async ({ authorization }) => {
     const lookup = vi.fn();
     const result = await authenticateApiRequest(
       request(authorization),

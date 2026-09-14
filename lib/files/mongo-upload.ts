@@ -69,6 +69,20 @@ export function createMongoUploadDependencies(): UploadServiceDependencies {
     ...limits,
     async findIdempotent(ownerId, keyHash, now) {
       await connectDB();
+      await File.updateMany(
+        {
+          ownerId,
+          idempotencyKeyHash: keyHash,
+          idempotencyExpiresAt: { $lte: now },
+        },
+        {
+          $unset: {
+            idempotencyKeyHash: "",
+            idempotencyPayloadHash: "",
+            idempotencyExpiresAt: "",
+          },
+        },
+      );
       const file = await File.findOne({
         ownerId,
         idempotencyKeyHash: keyHash,

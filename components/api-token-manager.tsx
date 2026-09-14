@@ -21,6 +21,13 @@ function date(value: string | null) {
   return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value)) : "Never";
 }
 
+async function fetchTokens(): Promise<TokenRecord[]> {
+  const response = await fetch("/api/settings/tokens", { cache: "no-store" });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error?.message || "Unable to load tokens");
+  return body.data;
+}
+
 export function ApiTokenManager() {
   const [tokens, setTokens] = useState<TokenRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,10 +39,7 @@ export function ApiTokenManager() {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/settings/tokens", { cache: "no-store" });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message || "Unable to load tokens");
-      setTokens(body.data);
+      setTokens(await fetchTokens());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to load tokens");
     } finally {
@@ -43,7 +47,16 @@ export function ApiTokenManager() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let active = true;
+    void fetchTokens()
+      .then((records) => { if (active) setTokens(records); })
+      .catch((error: unknown) => {
+        if (active) toast.error(error instanceof Error ? error.message : "Unable to load tokens");
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   async function createToken(event: React.FormEvent) {
     event.preventDefault();

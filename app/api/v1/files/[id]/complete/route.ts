@@ -4,6 +4,7 @@ import { publicFile, uploadErrorResponse } from "@/lib/api/files";
 import { getOwnedFile } from "@/lib/files/management";
 import { createMongoUploadDependencies } from "@/lib/files/mongo-upload";
 import { completeUpload, UploadServiceError } from "@/lib/files/service";
+import { writeApiLog } from "@/lib/api/logging";
 
 interface Context { params: Promise<{ id: string }> }
 
@@ -23,7 +24,7 @@ export async function POST(request: Request, context: Context) {
       authorization.headers.forEach((value, key) => response.headers.set(key, value));
       return response;
     }
-    console.error("API upload completion failed", { requestId, error });
+    writeApiLog({ requestId, route: "/api/v1/files/:id/complete", status: 500, durationMs: 0, tokenId: authorization.principal.tokenId, errorCode: "internal_error", error });
     return apiError(500, "internal_error", "Unable to complete upload.", { requestId, headers: authorization.headers });
   }
 }

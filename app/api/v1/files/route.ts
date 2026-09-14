@@ -7,6 +7,7 @@ import { listOwnedFiles } from "@/lib/files/management";
 import { createMongoUploadDependencies } from "@/lib/files/mongo-upload";
 import { initializeUpload, UploadServiceError } from "@/lib/files/service";
 import { apiUploadSchema } from "@/lib/validation";
+import { writeApiLog } from "@/lib/api/logging";
 
 function addHeaders(response: Response, headers: Headers): Response {
   headers.forEach((value, key) => response.headers.set(key, value));
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
         headers: authorization.headers,
       });
     }
-    console.error("API file list failed", { requestId, error });
+    writeApiLog({ requestId, route: "/api/v1/files", status: 500, durationMs: 0, tokenId: authorization.principal.tokenId, errorCode: "internal_error", error });
     return apiError(500, "internal_error", "Unable to list files.", {
       requestId,
       headers: authorization.headers,
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
         headers: authorization.headers,
       });
     }
-    console.error("API upload initialization failed", { requestId, error });
+    writeApiLog({ requestId, route: "/api/v1/files", status: 500, durationMs: 0, tokenId: authorization.principal.tokenId, errorCode: "internal_error", error });
     return apiError(500, "internal_error", "Unable to initialize upload.", {
       requestId,
       headers: authorization.headers,
