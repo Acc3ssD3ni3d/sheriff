@@ -11,6 +11,7 @@ import { createApiTokenSchema } from "@/lib/validation";
 import { ApiToken } from "@/models/api-token";
 import { rateLimitHeaders } from "@/lib/api/rate-limit";
 import { consumeTokenCreationLimit } from "@/lib/api/token-creation-limit";
+import { getServerEnv } from "@/lib/env";
 
 function serializeToken(token: {
   _id?: unknown;
@@ -133,7 +134,7 @@ export async function POST(request: Request) {
       repository,
       session.user.id,
       parsed.data,
-      process.env.API_TOKEN_HASH_PEPPER ?? "",
+      getServerEnv().API_TOKEN_HASH_PEPPER,
     );
     return apiSuccess(
       { token: result.token, ...serializeToken(result.record) },

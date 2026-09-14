@@ -8,6 +8,7 @@ import { UploadDialog } from "./upload-dialog";
 import { FileList } from "./file-list";
 import { IFile } from "@/types";
 import { formatBytes } from "@/lib/utils";
+import Link from "next/link";
 
 interface DashboardProps {
   user: {
@@ -248,6 +249,14 @@ export function Dashboard({ user }: DashboardProps) {
               </div>
             )}
           </div>
+
+          <Link
+            href="/profile"
+            className={`mb-2 flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-100 ${sidebarCollapsed ? "px-0" : "px-3"}`}
+            title="Profile and API access"
+          >
+            {!sidebarCollapsed ? "Profile & API access" : "API"}
+          </Link>
 
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}

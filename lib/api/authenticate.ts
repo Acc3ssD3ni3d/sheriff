@@ -7,6 +7,7 @@ import {
   type ApiScope,
 } from "@/lib/api/tokens";
 import { ApiToken } from "@/models/api-token";
+import { getServerEnv } from "@/lib/env";
 
 export interface ApiPrincipal {
   userId: string;
@@ -82,7 +83,7 @@ export async function authenticateApiRequest(
 
   const lookup = dependencies.lookup ?? lookupToken;
   const record = await lookup(parsed.publicId);
-  const pepper = dependencies.pepper ?? process.env.API_TOKEN_HASH_PEPPER ?? "";
+  const pepper = dependencies.pepper ?? getServerEnv().API_TOKEN_HASH_PEPPER;
   if (!record || !verifyApiToken(match[1], record.tokenHash, pepper)) {
     return { ok: false, response: invalidToken() };
   }
