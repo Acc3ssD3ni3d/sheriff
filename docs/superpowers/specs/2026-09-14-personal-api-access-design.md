@@ -203,7 +203,7 @@ Error response:
 - `401`: invalid API token
 - `403`: insufficient scope
 - `404`: resource absent or owned by another user
-- `409`: invalid state transition, idempotency conflict, or storage verification mismatch
+- `409`: invalid state transition, quota exhaustion, idempotency conflict, or storage verification mismatch
 - `413`: file exceeds the configured maximum size
 - `429`: token or upload rate limit exceeded
 - `500`: unexpected internal error
