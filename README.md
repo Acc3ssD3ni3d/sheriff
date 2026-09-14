@@ -1,317 +1,74 @@
-Sheriff
+# Sheriff
 
-Sheriff is a secure full-stack file storage and sharing application built for the Persist Ventures Full Stack Engineer assignment.
+Sheriff is a private file-storage and sharing application built with Next.js 16, React 19, Auth.js, MongoDB, and Cloudflare R2. Signed-in users can manage files in the dashboard or create scoped personal access tokens for automation.
 
-It allows authenticated users to upload, manage, download, and share files while keeping private files protected through server-side authorization.
+## Features
 
-Features
+- Credentials and Google authentication with protected dashboard/profile pages.
+- Direct-to-R2 uploads with progress, server-generated object keys, quota reservation, and server-side size/content-type verification.
+- Owner-scoped list, download, rename, visibility, trash, restore, and permanent deletion operations.
+- Public share links protected by unguessable share tokens; making a file private or deleting it revokes the link.
+- `/api/v1` personal API with HMAC-hashed tokens, least-privilege scopes, expiry/revocation, rate limits, request IDs, cursor pagination, and idempotent uploads.
+- Stale-upload cleanup that releases reserved quota and attempts R2 object cleanup.
 
-Authentication
+## Local setup
 
-User registration
+Requirements: Node.js 20+, MongoDB (transactions require a replica set/Atlas), and a private Cloudflare R2 bucket.
 
-Login and logout
-
-Password hashing
-
-Secure authentication sessions
-
-Protected dashboard
-
-File Storage
-
-Upload files to Cloudflare R2
-
-Support for 100MB+ files
-
-Upload progress
-
-File size and type validation
-
-Secure generated storage keys
-
-File metadata stored in MongoDB
-
-File Management
-
-View uploaded files
-
-Download files
-
-Rename files
-
-Delete files
-
-Search and sort files
-
-Upload status and error handling
-
-File Sharing
-
-Public/private file visibility
-
-Secure share tokens
-
-Public share pages
-
-Public file downloads
-
-Invalid share-link handling
-
-Security
-
-Server-side validation
-
-Authentication checks
-
-File ownership authorization
-
-MIME type validation
-
-File extension validation
-
-File size validation
-
-Filename sanitization
-
-Secure R2 access using server-generated signed URLs
-
-R2 credentials are never exposed to the client
-
-Tech Stack
-
-Next.js
-
-React
-
-TypeScript
-
-Tailwind CSS
-
-MongoDB Atlas
-
-Mongoose
-
-Auth.js
-
-Zod
-
-Cloudflare R2
-
-Vercel
-
-Architecture
-
-Browser
-|
-v
-Next.js
-|
-+----------------------+
-| |
-v v
-MongoDB Atlas Cloudflare R2
-| |
-User data Actual files
-File metadata 100MB+ files
-Permissions
-
-Large files are uploaded directly to Cloudflare R2 using a secure upload flow instead of sending the complete file through the Next.js application server.
-
-For downloads, the application first authenticates the user and checks the file's visibility/ownership before generating access to the stored object.
-
-Environment Variables
-
-Create a .env.local file in the project root:
-
-# MongoDB
-
-MONGODB_URI=mongodb+srv://...
-
-# Auth.js
-
-AUTH_SECRET=your-secret-here
-AUTH_URL=http://localhost:3000
-
-# Google OAuth
-
-GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-
-# Cloudflare R2
-
-R2_ACCOUNT_ID=your-account-id
-R2_ACCESS_KEY_ID=your-access-key
-R2_SECRET_ACCESS_KEY=your-secret-key
-R2_BUCKET_NAME=sheriff-files
-R2_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
-
-Never commit .env.local or real credentials to GitHub.
-
-Getting Started
-
-1. Clone the repository
-
-git clone <your-repository-url>
-cd sheriff
-
-2. Install dependencies
-
+```bash
 npm install
-
-3. Configure environment variables
-
-Create .env.local and add the required MongoDB, Auth.js, Google OAuth, and Cloudflare R2 credentials.
-
-4. Start the development server
-
+cp .env.example .env.local
 npm run dev
+```
 
-Open http://localhost:3000.
+Open `http://localhost:3000`. Fill every required value in `.env.local`; never commit credentials.
 
-Cloudflare R2 Setup
+### Environment
 
-Create an R2 bucket and configure an API token with the minimum required permissions.
+| Variable | Purpose |
+| --- | --- |
+| `MONGODB_URI` | MongoDB connection string |
+| `AUTH_SECRET`, `AUTH_URL` | Auth.js secret and application URL |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google provider credentials |
+| `API_TOKEN_HASH_PEPPER` | Independent long random secret used to HMAC personal tokens |
+| `CLEANUP_SECRET` | Independent bearer secret for the internal cleanup job |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` | R2 access and bucket |
+| `R2_ENDPOINT` | Optional explicit S3-compatible endpoint |
+| `MAX_FILE_SIZE_BYTES` | Optional per-object limit; defaults to 5 GiB |
+| `USER_STORAGE_LIMIT_BYTES` | Optional per-user limit; defaults to 10 GiB; trash counts |
 
-Recommended:
+Generate separate high-entropy values for `AUTH_SECRET`, `API_TOKEN_HASH_PEPPER`, and `CLEANUP_SECRET`. Production validation reports missing variable names without printing secret values.
 
-Object Read & Write
+## Personal API
 
-Restrict access to the Sheriff bucket only
+After signing in, open `/profile` to generate a token. The plaintext appears once. Available scopes are:
 
-Required values:
+- `files:read`: metadata, lists, and temporary download URLs.
+- `files:write`: upload initialization/completion, rename, and visibility.
+- `files:delete`: trash, restore, and permanent deletion.
 
-R2_ACCOUNT_ID
+See [the curl guide](docs/api.md) and [OpenAPI 3.1 contract](public/openapi.yaml). The app also serves a concise authenticated guide at `/docs/api` and the contract at `/openapi.yaml`.
 
-R2_ACCESS_KEY_ID
+The API is intended for server, CLI, and trusted native clients. It deliberately does not enable permissive cross-origin browser access. Personal tokens can access only resources whose `ownerId` matches the token owner.
 
-R2_SECRET_ACCESS_KEY
+## Cleanup scheduling
 
-R2_BUCKET_NAME
+Call this endpoint regularly (for example every five minutes) from a trusted scheduler:
 
-R2_ENDPOINT
+```bash
+curl -X POST https://your-host/api/internal/cleanup/uploads \
+  -H "Authorization: Bearer $CLEANUP_SECRET"
+```
 
-Do not expose R2 access keys through client-side environment variables.
+It processes up to 100 expired 15-minute upload reservations per invocation. Repeated calls are safe because reservation release is conditional and transactional.
 
-Database
+## Verification
 
-MongoDB stores application data and file metadata.
-
-User
-
-\_id
-name
-email
-passwordHash
-createdAt
-updatedAt
-
-File
-
-\_id
-ownerId
-originalName
-storageKey
-mimeType
-size
-visibility
-shareToken
-status
-createdAt
-updatedAt
-
-Actual file contents are stored in Cloudflare R2, not MongoDB.
-
-Security Model
-
-Every protected file operation follows:
-
-Request
-|
-v
-Authenticate user
-|
-v
-Find file
-|
-v
-Check ownership / public visibility
-|
-v
-Allow or reject request
-
-A logged-in user cannot access another user's private file simply by knowing its file ID.
-
-Public files are accessed through secure share tokens rather than exposing internal database identifiers as public links.
-
-API Overview
-
-GET /api/files
-POST /api/files
-GET /api/files/[id]
-PATCH /api/files/[id]
-DELETE /api/files/[id]
-
-GET /api/files/[id]/download
-PATCH /api/files/[id]/visibility
-
-GET /share/[token]
-
-Authentication routes are handled through the configured Auth.js setup.
-
-Testing Checklist
-
-Register
-
-Login
-
-Logout
-
-Protected dashboard
-
-Upload a normal file
-
-Upload a 100MB+ file
-
-Upload progress
-
-Invalid file validation
-
-Oversized file validation
-
-Download
-
-Rename
-
-Delete
-
-Public file
-
-Private file
-
-Public share link
-
-Invalid share link
-
-Unauthorized file access
-
-Production build
-
-Development
-
-npm run dev
-
-Production Build
-
+```bash
+npm test
+npm run lint
+npm run typecheck
 npm run build
-npm start
+```
 
-Assignment
-
-Built as a Full Stack Engineer technical assignment for Persist Ventures.
-
-The implementation focuses on secure authentication, authorization, scalable file storage, RESTful API design, MongoDB data modeling, cloud object storage, file validation, error handling, maintainable architecture, and responsive user experience.
-
-License
-
-This project is created for evaluation and portfolio purposes.
+Actual bytes live in R2. MongoDB stores users, file metadata, quota counters, token digests, and rate-limit buckets. Presigned URLs last 15 minutes and must be treated as temporary secrets.

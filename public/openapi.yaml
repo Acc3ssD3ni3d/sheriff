@@ -1,0 +1,286 @@
+openapi: 3.1.0
+info:
+  title: Sheriff Personal File API
+  version: 1.0.0
+  description: Owner-scoped file access using personal bearer tokens created in the Sheriff profile.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - name: Files
+paths:
+  /api/v1/files:
+    get:
+      tags: [Files]
+      operationId: listFiles
+      summary: List the token owner's files
+      description: Requires `files:read`. Results use opaque cursor pagination.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: sort, in: query, schema: { type: string, enum: [createdAt, originalName, size], default: createdAt } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { name: include, in: query, schema: { type: string, enum: [active, trash], default: active } }
+      responses:
+        '200':
+          description: File page
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+            RateLimit-Limit: { $ref: '#/components/headers/RateLimit' }
+            RateLimit-Remaining: { $ref: '#/components/headers/RateLimit' }
+            RateLimit-Reset: { $ref: '#/components/headers/RateLimit' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  data:
+                    type: object
+                    required: [files, nextCursor]
+                    properties:
+                      files: { type: array, items: { $ref: '#/components/schemas/File' } }
+                      nextCursor: { type: [string, 'null'] }
+                  requestId: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      tags: [Files]
+      operationId: initializeUpload
+      summary: Reserve quota and initialize a direct upload
+      description: Requires `files:write`. Send the same `Idempotency-Key` to safely retry for 24 hours. The returned URL is a temporary secret.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string, minLength: 1, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UploadRequest' }
+      responses:
+        '201':
+          description: Upload reservation
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties: { data: { $ref: '#/components/schemas/UploadInitialization' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/files/{id}:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [Files]
+      operationId: getFile
+      summary: Get owner-scoped file metadata
+      description: Requires `files:read`.
+      responses:
+        '200': { $ref: '#/components/responses/FileSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    patch:
+      tags: [Files]
+      operationId: updateFile
+      summary: Rename a file or change its share visibility
+      description: Requires `files:write`. Setting private revokes the previous share token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                filename: { type: string, minLength: 1, maxLength: 255 }
+                visibility: { type: string, enum: [private, public] }
+      responses:
+        '200': { $ref: '#/components/responses/FileSuccess' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [Files]
+      operationId: trashFile
+      summary: Move a file to trash
+      description: Requires `files:delete`. The operation also makes the file private and revokes its share token. Trash continues to count against quota.
+      parameters:
+        - name: permanent
+          in: query
+          description: Set to true to permanently remove a file that is already in trash. R2 is deleted before metadata and quota are released.
+          schema: { type: boolean, default: false }
+      responses:
+        '200': { $ref: '#/components/responses/FileSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/StorageFailure' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/files/{id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    post:
+      tags: [Files]
+      operationId: completeUpload
+      summary: Verify and finalize a direct upload
+      description: Requires `files:write`. Sheriff verifies R2 object size and content type before marking it complete.
+      responses:
+        '200': { $ref: '#/components/responses/FileSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/files/{id}/download:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    get:
+      tags: [Files]
+      operationId: createDownloadUrl
+      summary: Create a temporary download URL
+      description: Requires `files:read`. The returned URL expires after 15 minutes and should be treated as a secret.
+      responses:
+        '200':
+          description: Temporary download URL
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [url, expiresIn]
+                        properties:
+                          url: { type: string, format: uri }
+                          expiresIn: { type: integer, const: 900 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /api/v1/files/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/FileId'
+    post:
+      tags: [Files]
+      operationId: restoreFile
+      summary: Restore a file from trash
+      description: Requires `files:delete`. Restoration succeeds only while the object still exists.
+      responses:
+        '200': { $ref: '#/components/responses/FileSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sheriff personal access token
+  parameters:
+    FileId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[0-9a-fA-F]{24}$' }
+  headers:
+    RequestId: { description: Request correlation ID, schema: { type: string } }
+    RateLimit: { description: Fixed-window rate-limit metadata, schema: { type: integer } }
+  schemas:
+    File:
+      type: object
+      required: [id, filename, contentType, size, status, visibility, shareToken, deletedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        filename: { type: string }
+        contentType: { type: string }
+        size: { type: integer, minimum: 1 }
+        status: { type: string, enum: [completed] }
+        visibility: { type: string, enum: [private, public] }
+        shareToken: { type: [string, 'null'], description: Present only for public sharing. }
+        deletedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UploadRequest:
+      type: object
+      additionalProperties: false
+      required: [filename, contentType, size]
+      properties:
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        contentType: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 5368709120 }
+    UploadInitialization:
+      type: object
+      required: [fileId, uploadUrl, method, headers, expiresAt]
+      properties:
+        fileId: { type: string }
+        uploadUrl: { type: string, format: uri, description: Temporary secret valid for 15 minutes. }
+        method: { type: string, const: PUT }
+        headers:
+          type: object
+          required: [Content-Type]
+          properties: { Content-Type: { type: string } }
+        expiresAt: { type: string, format: date-time }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+            details: {}
+    SuccessEnvelope:
+      type: object
+      required: [data, requestId]
+      properties:
+        data: {}
+        requestId: { type: string }
+  responses:
+    FileSuccess:
+      description: File metadata
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - type: object
+                properties: { data: { $ref: '#/components/schemas/File' } }
+    BadRequest: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    Unauthorized: { description: Missing or invalid token, headers: { WWW-Authenticate: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    Forbidden: { description: Token lacks the required scope, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    NotFound: { description: File absent or owned by another account, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    Conflict: { description: "Quota, idempotency, state, or verification conflict", content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    TooLarge: { description: File exceeds configured limit, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    Gone: { description: Upload reservation expired, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After: { schema: { type: integer } }
+        RateLimit-Limit: { $ref: '#/components/headers/RateLimit' }
+        RateLimit-Remaining: { $ref: '#/components/headers/RateLimit' }
+        RateLimit-Reset: { $ref: '#/components/headers/RateLimit' }
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    StorageFailure: { description: Object storage deletion failed and metadata was retained for retry, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }

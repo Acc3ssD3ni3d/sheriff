@@ -56,11 +56,18 @@ export async function POST(request: Request) {
         headers: authorization.headers,
       });
     }
+    const idempotencyKey = request.headers.get("idempotency-key");
+    if (idempotencyKey && idempotencyKey.length > 200) {
+      return apiError(400, "invalid_request", "Idempotency-Key must be at most 200 characters.", {
+        requestId,
+        headers: authorization.headers,
+      });
+    }
     const upload = await initializeUpload(
       createMongoUploadDependencies(),
       authorization.principal.userId,
       parsed.data,
-      request.headers.get("idempotency-key"),
+      idempotencyKey,
     );
     return apiSuccess(upload, requestId, {
       status: 201,

@@ -7,6 +7,11 @@ import {
   updateOwnedFile,
 } from "@/lib/files/management";
 import { apiFileUpdateSchema } from "@/lib/validation";
+import {
+  createMongoDeletionDependencies,
+  FileDeletionError,
+  permanentlyDeleteFile,
+} from "@/lib/files/deletion";
 
 interface Context { params: Promise<{ id: string }> }
 
@@ -44,6 +49,18 @@ export async function DELETE(request: Request, context: Context) {
   if (!authorization.ok) return authorization.response;
   const requestId = createRequestId();
   const { id } = await context.params;
+  if (new URL(request.url).searchParams.get("permanent") === "true") {
+    try {
+      await permanentlyDeleteFile(createMongoDeletionDependencies(), authorization.principal.userId, id);
+      return apiSuccess({ id, deleted: true }, requestId, { headers: authorization.headers });
+    } catch (error) {
+      if (error instanceof FileDeletionError) {
+        return apiError(error.code === "file_not_found" ? 404 : 502, error.code, error.message, { requestId, headers: authorization.headers });
+      }
+      console.error("API permanent file deletion failed", { requestId, error });
+      return apiError(500, "internal_error", "Unable to permanently delete file.", { requestId, headers: authorization.headers });
+    }
+  }
   const file = await softDeleteOwnedFile(authorization.principal.userId, id);
   if (!file) return apiError(404, "file_not_found", "File not found.", { requestId, headers: authorization.headers });
   return apiSuccess(publicFile(file), requestId, { headers: authorization.headers });
