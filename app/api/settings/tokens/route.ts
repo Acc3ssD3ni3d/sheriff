@@ -9,6 +9,8 @@ import {
 } from "@/lib/api/token-service";
 import { createApiTokenSchema } from "@/lib/validation";
 import { ApiToken } from "@/models/api-token";
+import { rateLimitHeaders } from "@/lib/api/rate-limit";
+import { consumeTokenCreationLimit } from "@/lib/api/token-creation-limit";
 
 function serializeToken(token: {
   _id?: unknown;
@@ -93,6 +95,19 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return apiError(401, "unauthorized", "Sign in is required.", { requestId });
+  }
+
+  const tokenCreationLimit = await consumeTokenCreationLimit(session.user.id);
+  if (!tokenCreationLimit.allowed) {
+    return apiError(
+      429,
+      "rate_limit_exceeded",
+      "Too many token creation attempts. Try again later.",
+      {
+        requestId,
+        headers: rateLimitHeaders(tokenCreationLimit),
+      },
+    );
   }
 
   let body: unknown;
