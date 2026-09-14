@@ -3,32 +3,46 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getServerEnv } from "@/lib/env";
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME!;
+let cachedClient: S3Client | null = null;
 
-export const r2Client = new S3Client({
-  region: "auto",
-  endpoint:
-    process.env.R2_ENDPOINT ||
-    `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
-  },
-});
+function r2Config() {
+  const env = getServerEnv();
+  return {
+    bucket: env.R2_BUCKET_NAME,
+    client:
+      cachedClient ??=
+        new S3Client({
+          region: "auto",
+          endpoint:
+            env.R2_ENDPOINT ||
+            `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+          credentials: {
+            accessKeyId: env.R2_ACCESS_KEY_ID,
+            secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+          },
+        }),
+  };
+}
 
-export async function getPresignedUploadUrl(key: string): Promise<string> {
+export async function getPresignedUploadUrl(
+  key: string,
+  contentType?: string,
+  contentLength?: number,
+): Promise<string> {
+  const { bucket, client } = r2Config();
   const command = new PutObjectCommand({
-    Bucket: R2_BUCKET_NAME,
+    Bucket: bucket,
     Key: key,
+    ...(contentType ? { ContentType: contentType } : {}),
+    ...(contentLength ? { ContentLength: contentLength } : {}),
   });
 
-  return await getSignedUrl(r2Client, command, { expiresIn: 900 });
+  return await getSignedUrl(client, command, { expiresIn: 900 });
 }
 
 export async function getPresignedDownloadUrl(
@@ -36,22 +50,49 @@ export async function getPresignedDownloadUrl(
   originalName: string,
   disposition: "attachment" | "inline" = "attachment",
 ): Promise<string> {
+  const { bucket, client } = r2Config();
   const command = new GetObjectCommand({
-    Bucket: R2_BUCKET_NAME,
+    Bucket: bucket,
     Key: key,
     ResponseContentDisposition: `${disposition}; filename="${encodeURIComponent(
       originalName,
     )}"`,
   });
 
-  return await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+  return await getSignedUrl(client, command, { expiresIn: 900 });
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
+  const { bucket, client } = r2Config();
   const command = new DeleteObjectCommand({
-    Bucket: R2_BUCKET_NAME,
+    Bucket: bucket,
     Key: key,
   });
 
-  await r2Client.send(command);
+  await client.send(command);
+}
+
+export async function headR2Object(
+  key: string,
+): Promise<{ size: number; contentType: string } | null> {
+  const { bucket, client } = r2Config();
+  try {
+    const result = await client.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: key }),
+    );
+    if (result.ContentLength === undefined) return null;
+    return {
+      size: result.ContentLength,
+      contentType: result.ContentType ?? "application/octet-stream",
+    };
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      ("name" in error && error.name === "NotFound")
+    ) {
+      return null;
+    }
+    throw error;
+  }
 }

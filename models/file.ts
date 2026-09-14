@@ -2,6 +2,8 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 export type FileVisibility = "public" | "private";
 export type FileStatus = "uploading" | "completed" | "failed";
+export type ReservationState = "reserved" | "used" | "released";
+export type DeletionState = "active" | "deletion_failed";
 
 export interface IFileDocument extends Document {
   ownerId: mongoose.Types.ObjectId;
@@ -13,6 +15,12 @@ export interface IFileDocument extends Document {
   shareToken?: string | null;
   status: FileStatus;
   deletedAt?: Date | null;
+  uploadExpiresAt?: Date | null;
+  reservationState?: ReservationState | null;
+  idempotencyKeyHash?: string | null;
+  idempotencyPayloadHash?: string | null;
+  idempotencyExpiresAt?: Date | null;
+  deletionState?: DeletionState;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,6 +69,20 @@ const fileSchema = new Schema<IFileDocument>(
       type: Date,
       default: null,
     },
+    uploadExpiresAt: { type: Date, default: null },
+    reservationState: {
+      type: String,
+      enum: ["reserved", "used", "released"],
+      default: null,
+    },
+    idempotencyKeyHash: { type: String, default: null },
+    idempotencyPayloadHash: { type: String, default: null },
+    idempotencyExpiresAt: { type: Date, default: null },
+    deletionState: {
+      type: String,
+      enum: ["active", "deletion_failed"],
+      default: "active",
+    },
   },
   {
     timestamps: true,
@@ -73,6 +95,14 @@ fileSchema.index(
   {
     unique: true,
     partialFilterExpression: { shareToken: { $type: "string" } },
+  },
+);
+fileSchema.index({ status: 1, uploadExpiresAt: 1 });
+fileSchema.index(
+  { ownerId: 1, idempotencyKeyHash: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { idempotencyKeyHash: { $type: "string" } },
   },
 );
 
