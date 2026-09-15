@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { API_SCOPES } from "@/lib/api/tokens";
 
 export const registerSchema = z.object({
   name: z
@@ -39,6 +40,32 @@ export const renameFileSchema = z.object({
 export const visibilitySchema = z.object({
   visibility: z.enum(["public", "private"]),
 });
+
+export const apiUploadSchema = z
+  .object({
+    filename: z.string().trim().min(1).max(255),
+    contentType: z.string().trim().min(1).max(255),
+    size: z.number().int().positive(),
+  })
+  .strict();
+
+export const apiFileUpdateSchema = z
+  .object({
+    filename: z.string().trim().min(1).max(255).optional(),
+    visibility: z.enum(["public", "private"]).optional(),
+  })
+  .strict()
+  .refine((value) => value.filename !== undefined || value.visibility !== undefined, {
+    message: "At least one field is required",
+  });
+
+export const createApiTokenSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    scopes: z.array(z.enum(API_SCOPES)).min(1).transform((items) => [...new Set(items)]),
+    expiresInDays: z.union([z.literal(30), z.literal(90), z.literal(365), z.null()]),
+  })
+  .strict();
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

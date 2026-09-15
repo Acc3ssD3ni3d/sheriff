@@ -9,7 +9,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // ── Protect /dashboard ──
-  if (pathname.startsWith("/dashboard")) {
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/profile")) {
     if (isLoggedIn) return; // Allow
     const loginUrl = new URL("/login", req.nextUrl);
     loginUrl.searchParams.set("callbackUrl", pathname);

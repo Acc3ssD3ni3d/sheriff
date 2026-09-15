@@ -10,7 +10,7 @@ export const authConfig: NextAuthConfig = {
       const pathname = nextUrl.pathname;
 
       // Protect dashboard and all sub-routes
-      if (pathname.startsWith("/dashboard")) {
+      if (pathname.startsWith("/dashboard") || pathname.startsWith("/profile")) {
         return isLoggedIn; // false = redirect to signIn page
       }
 

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     await connectDB();
     const file = await File.findById(id);
 
-    if (!file || file.status !== "completed") {
+    if (!file || file.status !== "completed" || file.deletedAt) {
       return NextResponse.json(
         { success: false, error: "File not found or not ready" },
         { status: 404 },
@@ -28,10 +28,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     const shouldRedirect = searchParams.get("redirect") === "true";
 
     const isOwner = session?.user?.id === file.ownerId.toString();
-    const isPublic = file.visibility === "public";
-    const hasValidToken = token && file.shareToken === token;
+    const hasValidToken = Boolean(
+      token && file.visibility === "public" && file.shareToken === token,
+    );
 
-    if (!isOwner && !isPublic && !hasValidToken) {
+    if (!isOwner && !hasValidToken) {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
         { status: 403 },

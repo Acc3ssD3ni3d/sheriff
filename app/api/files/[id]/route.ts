@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { File } from "@/models/file";
-import { deleteFromR2 } from "@/lib/r2";
 import { renameFileSchema } from "@/lib/validation";
+import { cancelUpload, UploadServiceError } from "@/lib/files/service";
+import { createMongoUploadDependencies } from "@/lib/files/mongo-upload";
+import {
+  createMongoDeletionDependencies,
+  FileDeletionError,
+  permanentlyDeleteFile,
+} from "@/lib/files/deletion";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -23,8 +29,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const token = req.nextUrl.searchParams.get("token");
     const isOwner = session?.user?.id === file.ownerId.toString();
-    if (!isOwner && file.visibility !== "public") {
+    const hasValidToken = Boolean(
+      token && file.visibility === "public" && file.shareToken === token,
+    );
+    if (file.deletedAt || file.status !== "completed" || (!isOwner && !hasValidToken)) {
       return NextResponse.json(
         { success: false, error: "Access denied" },
         { status: 403 },
@@ -55,21 +65,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const body = await req.json();
 
     await connectDB();
-
-    if (body.status) {
-      if (!["completed", "failed"].includes(body.status)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid status" },
-          { status: 400 },
-        );
-      }
-      const updated = await File.findOneAndUpdate(
-        { _id: id, ownerId: session.user.id },
-        { $set: { status: body.status } },
-        { new: true },
-      );
-      return NextResponse.json({ success: true, data: updated });
-    }
 
     if (body.name) {
       const result = renameFileSchema.safeParse({ name: body.name });
@@ -130,21 +125,45 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
 
     if (permanent) {
       try {
-        await deleteFromR2(file.storageKey);
-      } catch (r2Err) {
-        console.error("R2 delete warning:", r2Err);
+        await permanentlyDeleteFile(
+          createMongoDeletionDependencies(),
+          session.user.id,
+          id,
+        );
+      } catch (error) {
+        if (error instanceof FileDeletionError) {
+          return NextResponse.json(
+            { success: false, error: error.message, code: error.code },
+            { status: error.code === "file_not_found" ? 404 : 502 },
+          );
+        }
+        throw error;
       }
-      await File.deleteOne({ _id: id, ownerId: session.user.id });
       return NextResponse.json({
         success: true,
         message: "File permanently deleted",
       });
     }
 
+    if (file.status === "uploading") {
+      try {
+        await cancelUpload(createMongoUploadDependencies(), session.user.id, id);
+        return NextResponse.json({ success: true, message: "Upload cancelled" });
+      } catch (error) {
+        if (error instanceof UploadServiceError) {
+          return NextResponse.json(
+            { success: false, error: error.message, code: error.code },
+            { status: error.code === "file_not_found" ? 404 : 409 },
+          );
+        }
+        throw error;
+      }
+    }
+
     // Direct atomic write to MongoDB
     await File.updateOne(
       { _id: id, ownerId: session.user.id },
-      { $set: { deletedAt: new Date() } },
+      { $set: { deletedAt: new Date(), visibility: "private", shareToken: null } },
     );
 
     return NextResponse.json({ success: true, message: "File moved to trash" });
